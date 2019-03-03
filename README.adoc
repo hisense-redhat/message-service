@@ -1,0 +1,147 @@
+= 消息服务
+:toc: manual
+
+== AMQ 部署
+
+=== 本地部署
+
+[source, text]
+.*1. 解压安装*
+----
+$ unzip amq-broker-7.2.3-bin.zip && cd amq-broker-7.2.3
+----
+
+[source, text]
+.*2. 创建一个 broker*
+----
+$ ./bin/artemis create --user admin --password admin --role admin --allow-anonymous y ./instances/broker1
+----
+
+[source, text]
+.*3. 启动 broker*
+----
+$ cd instances/broker1/
+$ ./bin/artemis run
+----
+
+*4. 访问 AMQ Console*
+
+Access the http://localhost:8161/console in a broswer, login with `admin`/`admin`.
+
+
+=== 部署到 OpenShift
+
+[source, text]
+.*1. 下载 Imagestream 模版*
+----
+# wget https://raw.githubusercontent.com/jboss-container-images/jboss-amq-7-broker-openshift-image/amq-broker-72/amq-broker-7-image-streams.yaml
+----
+
+[source, text]
+.*2. 编辑 Imagestream, 修改 registry.access.redhat.com 为 registry.example.com*
+----
+# vim amq-broker-7-image-streams.yaml
+...
+registry.example.com/amq-broker-7/amq-broker-72-openshift:1.1
+registry.example.com/amq-broker-7/amq-broker-72-openshift:1.0
+----
+
+[source, text]
+.*3. 创建 Imagestream*
+----
+# oc replace --force  -f amq-broker-7-image-streams.yaml -n openshift
+----
+
+[source, text]
+.*4. 创建 AMQ Broker link:etc/files/amq-broker-72-basic.yaml[amq-broker-72-basic.yaml]*
+----
+$ oc new-project message-service
+$ oc create -f etc/files/amq-broker-72-basic.yaml
+$ oc policy add-role-to-user view system:serviceaccount:message-service:amq-service-account
+$ oc new-app --template=amq-broker-72-basic -e AMQ_PROTOCOL=openwire,amqp,stomp,mqtt,hornetq -e AMQ_USER=admin -e AMQ_PASSWORD=admin -e AMQ_ROLE=admin
+----
+
+[source, text]
+.*5. 查看运行的容器*
+----
+# oc get pods
+NAME                 READY     STATUS    RESTARTS   AGE
+broker-amq-1-8gsv7   1/1       Running   0          1m
+----
+
+[source, text]
+.*6. 查看消息服务*
+----
+$ oc get svc
+NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)     AGE
+broker-amq-amqp      ClusterIP   172.30.2.115     <none>        5672/TCP    <invalid>
+broker-amq-jolokia   ClusterIP   172.30.91.132    <none>        8161/TCP    <invalid>
+broker-amq-mqtt      ClusterIP   172.30.142.33    <none>        1883/TCP    <invalid>
+broker-amq-stomp     ClusterIP   172.30.233.183   <none>        61613/TCP   <invalid>
+broker-amq-tcp       ClusterIP   172.30.64.96     <none>        61616/TCP   <invalid>
+----
+
+*7. 登录 AMQ Console*
+
+访问 http://amq-console-message-service.apps.example.com , 使用 `admin`/`admin`.
+
+image:etc/img/amq-console.png[]
+
+== AMQP
+
+=== 本地运行
+
+[source, text]
+.*1. 编辑构建*
+----
+$ cd amqp/ && mvn clean install
+----
+
+[source, text]
+.*2. 运行*
+----
+$ java -jar target/amqp-transform-1.0.0.jar
+----
+
+[source, text]
+.*3. 测试*
+----
+$ curl -X GET http://localhost:8080/rest/api/ping
+PONG FROM CAMEL CONTEXT
+
+$ curl -X POST http://localhost:8080/rest/api/match -d '{"id": "1001", "name": "REDHAT", "age": 26, "title": "Leader of OpenSource"}' -H 'content-type: application/json'
+{"result":"DONE"}
+----
+
+[source, text]
+.*4. 查看 Console 日志输出*
+----
+16:50:06.705 [XNIO-3 task-1] INFO  matchRoute - Receive From Inboud Request: Person [id=1001, name=REDHAT, age=26, title=Leader of OpenSource]
+16:50:06.732 [XNIO-3 task-1] INFO  matchRoute - Convert to JSON: {"id":"1001","name":"REDHAT","age":26,"title":"Leader of OpenSource"}
+16:50:06.733 [XNIO-3 task-1] INFO  matchRoute - Send to Queue
+16:50:06.802 [Camel (MyCamel) thread #1 - JmsConsumer[q.new.inboud]] INFO  consumeRoute - Consume From Queue: {"id":"1001","name":"REDHAT","age":26,"title":"Leader of OpenSource"}
+----
+
+=== 部署到 OpenShift
+
+[source, text]
+.*1. 部署*
+----
+$ mvn fabric8:deploy -Popenshift
+----
+
+[source, text]
+.*2. 测试*
+----
+$ curl -X POST http://amqp-transform-message-service.apps.example.com/rest/api/match -d '{"id": "1001", "name": "REDHAT", "age": 26, "title": "Leader of OpenSource"}' -H 'content-type: application/json'
+{"result":"DONE"}
+----
+
+[source, text]
+.*3. 查看 Console 日志*
+----
+17:08:31.643 [XNIO-3 task-1] INFO  matchRoute - Receive From Inboud Request: Person [id=1001, name=REDHAT, age=26, title=Leader of OpenSource]
+17:08:31.659 [XNIO-3 task-1] INFO  matchRoute - Convert to JSON: {"id":"1001","name":"REDHAT","age":26,"title":"Leader of OpenSource"}
+17:08:31.659 [XNIO-3 task-1] INFO  matchRoute - Send to Queue
+17:08:31.779 [Camel (MyCamel) thread #1 - JmsConsumer[q.new.inboud]] INFO  consumeRoute - Consume From Queue: {"id":"1001","name":"REDHAT","age":26,"title":"Leader of OpenSource"}
+----
