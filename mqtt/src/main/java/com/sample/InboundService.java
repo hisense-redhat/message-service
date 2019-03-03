@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.sample.model.Person;
+import com.sample.model.Event;
 import com.sample.model.Success;
 
 @RestController
@@ -24,7 +24,7 @@ public class InboundService {
 	@Produce(uri = "direct:matchRoute")
     ProducerTemplate matchTemplate;
 	
-	@RequestMapping(path = "/amqp/api/ping", method = RequestMethod.GET)
+	@RequestMapping(path = "/mqtt/api/ping", method = RequestMethod.GET)
     public String ping() {
 		
 		Map<String, Object> headers = new HashMap<>();
@@ -34,11 +34,11 @@ public class InboundService {
 		return camelResponse;
 	}
 	
-	@RequestMapping(path = "/amqp/api/match", method = RequestMethod.POST, consumes = {MediaType.APPLICATION_JSON_VALUE}, produces = {MediaType.APPLICATION_JSON_VALUE})
-	public Success match(@RequestBody Person person) {
+	@RequestMapping(path = "/mqtt/api/event", method = RequestMethod.POST, consumes = {MediaType.APPLICATION_JSON_VALUE}, produces = {MediaType.APPLICATION_JSON_VALUE})
+	public Success event(@RequestBody Event person) {
 		
 		Map<String, Object> headers = new HashMap<String, Object>();
-		headers.put("METHOD", "match");
+		headers.put("METHOD", "event");
 		
 		String camelResponse = matchTemplate.requestBodyAndHeaders(matchTemplate.getDefaultEndpoint(), person, headers, String.class);
 		
@@ -46,15 +46,9 @@ public class InboundService {
 		
 		String comment = "NONE";
 
-        if (camelResponse.equals("0")) {
-            comment = "NO MATCH";
-        } else if (camelResponse.equals("1")) {
-            comment = "MATCH";
-        } else if (camelResponse.equals("2")) {
-            comment = "DONE";
-        } else {
-            comment = "ERROR";
-        }
+        if (camelResponse.equals("1")) {
+            comment = "SUCCESS";
+        } 
         
         success.setResult(comment);
 

@@ -106,10 +106,10 @@ $ java -jar target/amqp-transform-1.0.0.jar
 [source, text]
 .*3. 测试*
 ----
-$ curl -X GET http://localhost:8080/rest/api/ping
+$ curl -X GET http://localhost:8080/amqp/api/ping
 PONG FROM CAMEL CONTEXT
 
-$ curl -X POST http://localhost:8080/rest/api/match -d '{"id": "1001", "name": "REDHAT", "age": 26, "title": "Leader of OpenSource"}' -H 'content-type: application/json'
+$ curl -X POST http://localhost:8080/amqp/api/match -d '{"id": "1001", "name": "REDHAT", "age": 26, "title": "Leader of OpenSource"}' -H 'content-type: application/json'
 {"result":"DONE"}
 ----
 
@@ -133,7 +133,7 @@ $ mvn fabric8:deploy -Popenshift
 [source, text]
 .*2. 测试*
 ----
-$ curl -X POST http://amqp-transform-message-service.apps.example.com/rest/api/match -d '{"id": "1001", "name": "REDHAT", "age": 26, "title": "Leader of OpenSource"}' -H 'content-type: application/json'
+$ curl -X POST http://amqp-transform-message-service.apps.example.com/amqp/api/match -d '{"id": "1001", "name": "REDHAT", "age": 26, "title": "Leader of OpenSource"}' -H 'content-type: application/json'
 {"result":"DONE"}
 ----
 
@@ -145,3 +145,70 @@ $ curl -X POST http://amqp-transform-message-service.apps.example.com/rest/api/m
 17:08:31.659 [XNIO-3 task-1] INFO  matchRoute - Send to Queue
 17:08:31.779 [Camel (MyCamel) thread #1 - JmsConsumer[q.new.inboud]] INFO  consumeRoute - Consume From Queue: {"id":"1001","name":"REDHAT","age":26,"title":"Leader of OpenSource"}
 ----
+
+== MQTT
+
+=== 本地运行
+
+[source, text]
+.*1. 编辑构建*
+----
+$ cd mqtt/ && mvn clean install
+----
+
+[source, text]
+.*2. 运行*
+----
+$ java -jar target/mqtt-transform-1.0.0.jar
+----
+
+[source, text]
+.*3. 测试*
+----
+$ curl -X GET http://localhost:8080/mqtt/api/ping
+PONG FROM CAMEL CONTEXT
+
+$ curl -X POST http://localhost:8080/mqtt/api/event -d '{"deviceId": "DIV-X3FZ", "command": "SensorData", "data": "[\"XXX\"]", "createDate": 1476711243326, "nodeId": "NODE-ID", "sensorId": "SENSOR-ID"}' -H 'content-type: application/json'
+{"result":"SUCCESS"}
+----
+
+[source, text]
+.*4. 查看 Console 日志输出*
+----
+20:15:59.872 [XNIO-3 task-2] INFO  matchRoute - Receive From Inboud Request: com.sample.model.Event@2e888aa0
+20:15:59.891 [XNIO-3 task-2] INFO  matchRoute - Convert to JSON: {"deviceId":"DIV-X3FZ","command":"SensorData","data":"[\"XXX\"]","createDate":1476711243326,"nodeId":"NODE-ID","sensorId":"SENSOR-ID"}
+20:15:59.891 [XNIO-3 task-2] INFO  matchRoute - Publish to Topic
+20:15:59.892 [XNIO-3 task-2] INFO  o.a.c.component.mqtt.MQTTEndpoint - Connecting to tcp://127.0.0.1:1883 using 10 seconds timeout
+20:15:59.903 [hawtdispatch-DEFAULT-3] WARN  o.a.c.component.mqtt.MQTTEndpoint - No topic subscriptions were specified in configuration
+20:15:59.903 [hawtdispatch-DEFAULT-3] INFO  o.a.c.component.mqtt.MQTTEndpoint - MQTT Connection connected to tcp://127.0.0.1:1883
+20:15:59.917 [hawtdispatch-DEFAULT-2] INFO  consumeRoute - Sensor Data: {"deviceId":"DIV-X3FZ","command":"SensorData","data":"[\"XXX\"]","createDate":1476711243326,"nodeId":"NODE-ID","sensorId":"SENSOR-ID"}
+----
+
+=== 部署到 OpenShift
+
+[source, text]
+.*1. 部署*
+---- 
+$ mvn fabric8:deploy -Popenshift
+----
+
+[source, text]
+.*2. 测试*
+----
+$ curl -X POST http://mqtt-transform-message-service.apps.example.com/mqtt/api/event -d '{"deviceId": "DIV-X3FZ", "command": "SensorData", "data": "[XXX]", "createDate": 1476711243326, "nodeId": "NODE-ID", "sensorId": "SENSOR-ID"}' -H 'content-type: application/json'
+{"result":"SUCCESS"}
+----
+
+[source, text]
+.*3. 查看 Console 日志输出*
+----
+20:36:49.871 [XNIO-3 task-1] INFO  matchRoute - Receive From Inboud Request: com.sample.model.Event@68d5885d
+20:36:49.885 [XNIO-3 task-1] INFO  matchRoute - Convert to JSON: {"deviceId":"DIV-X3FZ","command":"SensorData","data":"[XXX]","createDate":1476711243326,"nodeId":"NODE-ID","sensorId":"SENSOR-ID"}
+20:36:49.886 [XNIO-3 task-1] INFO  matchRoute - Publish to Topic
+20:36:49.887 [XNIO-3 task-1] INFO  o.a.c.component.mqtt.MQTTEndpoint - Connecting to tcp://broker-amq-mqtt:1883 using 10 seconds timeout
+20:36:49.904 [hawtdispatch-DEFAULT-1] WARN  o.a.c.component.mqtt.MQTTEndpoint - No topic subscriptions were specified in configuration
+20:36:49.905 [hawtdispatch-DEFAULT-1] INFO  o.a.c.component.mqtt.MQTTEndpoint - MQTT Connection connected to tcp://broker-amq-mqtt:1883
+20:36:49.930 [hawtdispatch-DEFAULT-1] INFO  consumeRoute - Sensor Data: {"deviceId":"DIV-X3FZ","command":"SensorData","data":"[XXX]","createDate":1476711243326,"nodeId":"NODE-ID","sensorId":"SENSOR-ID"}
+----
+
+== Kafka Stream
